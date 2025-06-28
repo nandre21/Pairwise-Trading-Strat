@@ -1,141 +1,95 @@
-Pair Trading Strategy App
+# Pair Trading Strategy App
 
-https://2o1out-neil-luetz.shinyapps.io/pairwise/
+[https://2o1out-neil-luetz.shinyapps.io/pairwise/](https://2o1out-neil-luetz.shinyapps.io/pairwise/)
 
-Overview
+## Overview
 
-This Shiny app implements a statistical arbitrage pair trading strategy applied to S&P 500 stocks. The application allows users to select any two tickers from the S&P 500, visualize price behavior, evaluate trading signals generated from their spread, and backtest a mean-reversion strategy. Additionally, a correlation matrix of all S&P 500 stocks helps identify highly correlated pairs for optimal strategy selection.
+This Shiny app implements a **statistical arbitrage pair trading strategy** applied to S&P 500 stocks. The application allows users to select any two tickers from the S&P 500, visualize price behavior, evaluate trading signals generated from their spread, and backtest a mean-reversion strategy. Additionally, a correlation matrix of all S&P 500 stocks helps identify highly correlated pairs for optimal strategy selection.
 
-Explore the live application here. Note: Hosting is limited by rshiny.io free-tier constraints.
+Explore the live application [here](https://2o1out-neil-luetz.shinyapps.io/pairwise/). **Note: Hosting is limited by rshiny.io free-tier constraints.**
 
-Features
+## Features
 
-1. Pairwise Strategy Simulation
+### 1. Pairwise Strategy Simulation
 
-Select any two S&P 500 tickers.
+- Select any two S&P 500 tickers.
+- Choose historical lookback period (e.g., 1 year, 2 years).
+- Visualize log-price behavior and spread.
+- Backtest a mean-reversion trading strategy using z-score of the price ratio.
+- Evaluate performance via cumulative PnL, number of trades, average return per trade, Sharpe Ratio, and Profit Factor.
 
-Choose historical lookback period (e.g., 1 year, 2 years).
+### 2. Correlation Matrix Tab
 
-Visualize log-price behavior and spread.
+- Displays a heatmap correlation matrix of all S&P 500 stock returns over the selected window.
+- Helps identify candidate pairs based on high correlation.
 
-Backtest a mean-reversion trading strategy using z-score of the price spread.
+### 3. User Interface (Dark Mode)
 
-Evaluate performance via cumulative PnL, number of trades, average return per trade, and Sharpe Ratio.
+- Responsive dashboard with dark-themed UI.
+- Tab-based navigation for clarity and ease of use.
 
-2. Correlation Matrix Tab
+## How It Was Made
 
-Displays a heatmap correlation matrix of all S&P 500 stock returns over the selected window.
+### Strategy Logic
 
-Helps identify candidate pairs based on high correlation.
+1. **Data Acquisition**:
+   - The app automatically scrapes the full list of S&P 500 tickers from Wikipedia.
+   - Historical daily closing prices are pulled via `quantmod::getSymbols()` from Yahoo Finance (starting January 2020).
 
-3. User Interface (Dark Mode)
+2. **Preprocessing**:
+   - Stocks are merged into a clean price matrix.
+   - A correlation matrix is computed using daily returns.
+   - Pairs with correlation > 0.75 are shortlisted.
 
-Responsive dashboard with dark-themed UI.
+3. **Cointegration Filter**:
+   - Each correlated pair is tested for cointegration using the **Engle-Granger approach** (`lm()` + `adf.test()` on residuals).
+   - Only pairs with statistically significant mean-reverting relationships (ADF p-value < 0.05) are retained.
 
-Tab-based navigation for clarity and ease of use.
+4. **Z-score Signal Logic** (based on **price ratio**, not spread):
+   - Compute price ratio: `Price1 / Price2`
+   - Rolling mean and standard deviation (40-day window) of the ratio.
+   - Z-score: `(Ratio - Mean) / SD`
+   - **Entry**:
+     - Long spread (buy A, sell B) if z-score < -2
+     - Short spread (sell A, buy B) if z-score > +2
+   - **Exit**: Close position when |z-score| < 0.5
 
-How It Was Made
+5. **Backtesting**:
+   - Trade signals generate daily position vectors.
+   - Daily returns from trades are aggregated to compute profit and loss.
+   - Key metrics like cumulative profit, Sharpe Ratio, and Profit Factor are computed for each pair.
 
-Strategy Logic
+### Parameters and Justification
 
-Pair Selection: Users select two S&P 500 stocks. Historical price data is fetched using quantmod::getSymbols().
+- **Entry Threshold (±2)**: Triggers trades only on more significant price divergences, reducing false signals.
+- **Exit Threshold (±0.5)**: Closes trades near the mean, capturing profit before full mean reversion.
+- **Rolling Window (40 Days)**: A common window in time-series trading, balancing short-term responsiveness with robustness.
 
-Log Prices & Spread: Calculates the log spread between the two assets.
+### Data Sources
 
-Z-score Signal: Calculates z-score of the spread over a rolling window.
+- Historical price data is fetched directly from Yahoo Finance via the `quantmod` package.
 
-Trading Logic:
+### Technical Stack
 
-Long spread when z < -entry threshold
+- **R/Shiny**: App framework
+- **Tidyverse (dplyr, ggplot2, etc.)**: Data wrangling and visualization
+- **quantmod**: Financial data fetching
+- **shinythemes**: Dark mode
+- **heatmaply / corrplot**: Correlation visualization
 
-Short spread when z > entry threshold
+### Limitations
 
-Exit when z reverts towards 0
+1. **Cointegration Checked (Engle-Granger Only)**:
+   - Each highly correlated pair undergoes an ADF test on the residuals of the linear model.
+   - However, this is a **pairwise method** — multivariate cointegration (e.g. Johansen test) is not used.
 
-Backtesting:
+2. **Transaction Costs**:
+   - Backtest does not currently account for commissions, bid-ask spreads, or slippage.
 
-Executes trades based on the above logic.
+3. **Lookahead Bias**:
+   - The z-score calculation uses rolling statistics, but care is taken to avoid using future data.
 
-Tracks position PnL, number of trades, Sharpe Ratio, and average holding period.
+4. **API Limits**:
+   - The Yahoo Finance API may occasionally rate-limit or return missing data for certain tickers.
 
-Data Sources
 
-Historical price data is fetched directly from Yahoo Finance via the quantmod package.
-
-Technical Stack
-
-R/Shiny: App framework
-
-Tidyverse (dplyr, ggplot2, etc.): Data wrangling and visualization
-
-quantmod: Financial data fetching
-
-shinythemes: Dark mode
-
-heatmaply / corrplot: Correlation visualization
-
-Limitations
-
-No Cointegration Check:
-
-Strategy assumes mean-reverting spread, but does not test for cointegration.
-
-Future work could include Engle-Granger test or Johansen test.
-
-Transaction Costs:
-
-Backtest does not currently account for commissions, bid-ask spreads, or slippage.
-
-Lookahead Bias:
-
-The z-score calculation uses rolling statistics, but care is taken to avoid using future data.
-
-API Limits:
-
-The Yahoo Finance API may occasionally rate-limit or return missing data for certain tickers.
-
-Installation
-
-Clone the repository:
-
-git clone https://github.com/YOURUSERNAME/pair-trading-strategy-app.git
-
-Open the R project in RStudio.
-
-Install required packages:
-
-install.packages(c("shiny", "ggplot2", "dplyr", "quantmod", "scales", "xts", "zoo", "shinythemes", "heatmaply"))
-
-Usage
-
-Run the app:
-
-shiny::runApp("app.R")
-
-Navigate tabs to explore backtest results and correlation heatmaps.
-
-Enter your selected pair tickers and lookback period to simulate the strategy.
-
-File Structure
-
-1.Pairwise.R: Contains strategy logic and utility functions.
-
-2.aPairwiseDark.R: Shiny UI and server code with dark-themed interface.
-
-
-
-Acknowledgements
-
-Yahoo Finance (via quantmod)
-
-RStudio / Shiny Team
-
-Community contributors to heatmaply, corrplot, and other visualization tools.
-
-Contributing
-
-Pull requests and suggestions are welcome. Open an issue or fork the repository to suggest changes.
-
-Contact
-
-neilluetz@gmail.com
